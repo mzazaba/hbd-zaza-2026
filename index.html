@@ -1,87 +1,148 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <title>HAPPY BIRTHDAY ANGEL ZAZABA</title>
-<!-- 移动端视口设置 -->
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<!-- 核心：响应式视口设置 -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 
 <style>
+/* 全局重置 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* 基础样式 - 适配所有屏幕 */
 body {
     background: #000;
     margin: 0;
     overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    /* 适配刘海屏/挖孔屏 */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
+/* 画布样式 - 全屏幕适配 */
 canvas {
     cursor: crosshair;
     display: block;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
+    /* 确保画布始终覆盖视口 */
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1;
 }
 
-/* 音频提示样式 - 仅隐藏提示，不影响画布 */
+/* 音频提示 - 响应式样式 */
 #audioTip {
     position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
     color: #fff;
-    font-size: 24px;
-    background: rgba(0,0,0,0.8);
-    padding: 20px 30px;
-    border-radius: 15px;
+    background: rgba(0,0,0,0.85);
+    padding: clamp(15px, 4vw, 30px) clamp(20px, 5vw, 40px);
+    border-radius: clamp(10px, 3vw, 15px);
     z-index: 100;
     transition: opacity 0.5s ease;
     text-align: center;
-    width: 80%;
-    max-width: 400px;
-    box-shadow: 0 0 20px rgba(255,255,255,0.3);
-    /* 初始显示 */
+    width: clamp(280px, 80%, 450px);
+    box-shadow: 0 0 clamp(10px, 3vw, 20px) rgba(255,255,255,0.3);
     opacity: 1;
     pointer-events: auto;
+    /* 响应式字体 */
+    font-size: clamp(18px, 5vw, 24px);
+    line-height: 1.5;
 }
 
-/* 仅隐藏提示的透明度，不删除元素 */
+/* 隐藏提示的状态 */
 #audioTip.hidden {
     opacity: 0;
     pointer-events: none;
+}
+
+/* 适配横屏/竖屏 */
+@media screen and (orientation: landscape) and (max-height: 500px) {
+    #audioTip {
+        padding: clamp(10px, 3vw, 20px) clamp(15px, 4vw, 30px);
+        font-size: clamp(16px, 4vw, 20px);
+        width: clamp(250px, 70%, 400px);
+    }
+}
+
+/* 大屏适配 */
+@media screen and (min-width: 1920px) {
+    #audioTip {
+        font-size: 28px;
+        padding: 25px 40px;
+        width: 500px;
+    }
 }
 </style>
 </head>
 <body>
 
 <canvas id="canvas"></canvas>
-<div id="audioTip">🎂 click me  🎵</div>
-<audio id="bgMusic" src="./hbdzaza.mpeg" loop preload="auto"></audio>
+<div id="audioTip">🎂 点击/触摸屏幕<br>播放生日音乐 🎵</div>
+<audio id="bgMusic" src="./hbdzaza.mp3" loop preload="auto"></audio>
 
 <script>
-// 核心修复：分离音频播放和事件移除逻辑
+// 全局变量
 const audio = document.getElementById('bgMusic');
 const audioTip = document.getElementById('audioTip');
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
-let isAudioPlayed = false; // 仅标记音频是否播放，不移除交互事件
-let cw = window.innerWidth;
-let ch = window.innerHeight;
+let isAudioPlayed = false;
+let cw, ch; // 画布宽高
+let fireworks = [];
+let particles = [];
+let hue = 120;
+let limiterTotal = 5;
+let limiterTick = 0;
+let timerTotal = 80;
+let timerTick = 0;
+let mousedown = false;
+let mx, my;
 
-// ========== 音频播放逻辑（修复核心）==========
-function playAudio(e) {
-    if (e) e.preventDefault(); // 仅阻止默认行为，不移除事件
+// ========== 核心：响应式画布适配 ==========
+function resizeCanvas() {
+    // 获取真实视口尺寸（适配各种屏幕）
+    cw = window.innerWidth;
+    ch = window.innerHeight;
     
-    if (isAudioPlayed) return; // 防止重复播放
+    // 设置画布实际像素尺寸（解决模糊问题）
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = cw * dpr;
+    canvas.height = ch * dpr;
+    canvas.style.width = `${cw}px`;
+    canvas.style.height = `${ch}px`;
+    
+    // 缩放上下文，适配高清屏
+    ctx.scale(dpr, dpr);
+    
+    // 重置鼠标/触摸位置
+    mx = cw / 2;
+    my = ch / 2;
+}
+
+// ========== 音频播放逻辑 ==========
+function playAudio(e) {
+    if (e) e.preventDefault();
+    if (isAudioPlayed) return;
     
     audio.play()
         .then(() => {
-            console.log('音乐播放成功');
             isAudioPlayed = true;
             audio.muted = false;
-            audioTip.classList.add('hidden'); // 仅隐藏提示，不影响画布
+            audioTip.classList.add('hidden');
         })
         .catch(error => {
-            console.log('播放失败，尝试降级方案:', error);
-            // 降级方案：仅解除静音，不移除事件
             audio.muted = false;
             audio.currentTime = 0;
             audio.play().catch(err => {
@@ -92,48 +153,7 @@ function playAudio(e) {
         });
 }
 
-// ========== 画布尺寸适配（修复初始化错误）==========
-function resizeCanvas() {
-    cw = window.innerWidth;
-    ch = window.innerHeight;
-    canvas.width = cw;
-    canvas.height = ch;
-}
-
-// 初始化画布尺寸
-resizeCanvas();
-window.addEventListener('resize', resizeCanvas);
-
-// ========== 绑定交互事件（保留所有事件，不移除）==========
-// 音频播放事件（保留，仅触发一次播放）
-document.addEventListener('click', playAudio);
-document.addEventListener('touchstart', playAudio, { passive: false });
-canvas.addEventListener('click', playAudio);
-canvas.addEventListener('touchstart', playAudio, { passive: false });
-
-// ========== 原有烟花动画逻辑（完整保留）==========
-window.requestAnimFrame = (function() {
-    return window.requestAnimationFrame ||
-                window.webkitRequestAnimationFrame ||
-                window.mozRequestAnimationFrame ||
-                function( callback ) {
-                    window.setTimeout( callback, 1000 / 60 );
-                };
-})();
-
-// 烟花相关变量
-let fireworks = [];
-let particles = [];
-let hue = 120;
-let limiterTotal = 5;
-let limiterTick = 0;
-let timerTotal = 80;
-let timerTick = 0;
-let mousedown = false;
-let mx = cw / 2;
-let my = ch / 2;
-
-// 工具函数
+// ========== 工具函数 ==========
 function random( min, max ) {
     return Math.random() * ( max - min ) + min;
 }
@@ -144,7 +164,7 @@ function calculateDistance( p1x, p1y, p2x, p2y ) {
     return Math.sqrt( Math.pow( xDistance, 2 ) + Math.pow( yDistance, 2 ) );
 }
 
-// 烟花类
+// ========== 烟花类（响应式优化） ==========
 function Firework( sx, sy, tx, ty ) {
     this.x = sx;
     this.y = sy;
@@ -155,12 +175,14 @@ function Firework( sx, sy, tx, ty ) {
     this.distanceToTarget = calculateDistance( sx, sy, tx, ty );
     this.distanceTraveled = 0;
     this.coordinates = [];
-    this.coordinateCount = 3;
+    // 响应式轨迹数量
+    this.coordinateCount = cw < 768 ? 2 : 3;
     while( this.coordinateCount-- ) {
         this.coordinates.push( [ this.x, this.y ] );
     }
     this.angle = Math.atan2( ty - sy, tx - sx );
-    this.speed = 2;
+    // 响应式速度
+    this.speed = cw < 768 ? 1.5 : 2;
     this.acceleration = 1.05;
     this.brightness = random( 50, 70 );
     this.targetRadius = 1;
@@ -196,6 +218,8 @@ Firework.prototype.draw = function() {
     ctx.moveTo( this.coordinates[ this.coordinates.length - 1][ 0 ], this.coordinates[ this.coordinates.length - 1][ 1 ] );
     ctx.lineTo( this.x, this.y );
     ctx.strokeStyle = 'hsl(' + hue + ', 100%, ' + this.brightness + '%)';
+    // 响应式线条宽度
+    ctx.lineWidth = cw < 768 ? 1 : 1.5;
     ctx.stroke();
     
     ctx.beginPath();
@@ -203,19 +227,21 @@ Firework.prototype.draw = function() {
     ctx.stroke();
 }
 
-// 粒子类
+// ========== 粒子类（响应式优化） ==========
 function Particle( x, y ) {
     this.x = x;
     this.y = y;
     this.coordinates = [];
-    this.coordinateCount = 5;
+    // 响应式轨迹数量
+    this.coordinateCount = cw < 768 ? 3 : 5;
     while( this.coordinateCount-- ) {
         this.coordinates.push( [ this.x, this.y ] );
     }
     this.angle = random( 0, Math.PI * 2 );
-    this.speed = random( 1, 10 );
+    // 响应式速度
+    this.speed = random( cw < 768 ? 0.8 : 1, cw < 768 ? 8 : 10 );
     this.friction = 0.95;
-    this.gravity = 1;
+    this.gravity = cw < 768 ? 0.8 : 1;
     this.hue = random( hue - 20, hue + 20 );
     this.brightness = random( 50, 80 );
     this.alpha = 1;
@@ -240,34 +266,46 @@ Particle.prototype.draw = function() {
     ctx.moveTo( this.coordinates[ this.coordinates.length - 1 ][ 0 ], this.coordinates[ this.coordinates.length - 1 ][ 1 ] );
     ctx.lineTo( this.x, this.y );
     ctx.strokeStyle = 'hsla(' + this.hue + ', 100%, ' + this.brightness + '%, ' + this.alpha + ')';
+    // 响应式线条宽度
+    ctx.lineWidth = cw < 768 ? 0.8 : 1;
     ctx.stroke();
 }
 
 function createParticles( x, y ) {
-    var particleCount = 30;
+    // 响应式粒子数量
+    var particleCount = cw < 768 ? 20 : 30;
     while( particleCount-- ) {
         particles.push( new Particle( x, y ) );
     }
 }
 
-// 主循环（核心：确保持续渲染）
+// ========== 主循环（响应式渲染） ==========
 function loop() {
-    requestAnimFrame( loop );
+    requestAnimationFrame( loop );
     hue += 0.5;
     
-    // 保留画布清空逻辑，这是正常的动画渲染
+    // 清空画布
     ctx.globalCompositeOperation = 'destination-out';
     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     ctx.fillRect( 0, 0, cw, ch );
     ctx.globalCompositeOperation = 'lighter';
     
-    // 文字适配
-    var text = "HAPPY BIRTHDAY ZAZABA !!";  
-    var fontSize = window.innerWidth < 768 ? "30px" : "50px";
-    ctx.font = fontSize + " sans-serif";
+    // 响应式文字
+    var text = "HAPPY BIRTHDAY ZAZABA !!";
+    // 根据屏幕宽度动态调整字体大小
+    let fontSize;
+    if (cw < 480) fontSize = "20px";          // 小屏手机
+    else if (cw < 768) fontSize = "28px";     // 大屏手机
+    else if (cw < 1200) fontSize = "40px";    // 平板/小屏电脑
+    else fontSize = "50px";                   // 大屏显示器
+    
+    ctx.font = `${fontSize} sans-serif`;
     var textData = ctx.measureText(text);
+    // 文字位置适配（居中）
+    const textX = (cw - textData.width) / 2;
+    const textY = ch / 2;
     ctx.fillStyle = "rgba("+parseInt(random(0,255))+","+parseInt(random(0,255))+","+parseInt(random(0,255))+",0.3)";
-    ctx.fillText(text, cw/2 - textData.width/2, ch/2); 
+    ctx.fillText(text, textX, textY); 
     
     // 渲染烟花
     var i = fireworks.length;
@@ -283,10 +321,13 @@ function loop() {
         particles[ i ].update( i );
     }
     
-    // 自动发射烟花
-    if( timerTick >= timerTotal ) {
+    // 响应式自动发射频率
+    const autoFireRate = cw < 768 ? 60 : 80;
+    if( timerTick >= autoFireRate ) {
         if( !mousedown ) {
-            for(var h=0; h<50; h++) {
+            // 响应式发射数量
+            const fireCount = cw < 768 ? 30 : 50;
+            for(var h=0; h<fireCount; h++) {
                 fireworks.push( new Firework( cw / 2, ch/2, random( 0, cw ), random( 0, ch ) ) );
             }
             timerTick = 0;
@@ -295,7 +336,6 @@ function loop() {
         timerTick++;
     }
     
-    // 点击/触摸发射烟花
     if( limiterTick >= limiterTotal ) {
         if( mousedown ) {
             fireworks.push( new Firework( cw / 2, ch/2, mx, my ) );
@@ -306,16 +346,26 @@ function loop() {
     }
 }
 
-// ========== 交互事件（完整保留，确保点击后仍能控制烟花）==========
-// 移动端触摸事件
-canvas.addEventListener( 'touchmove', function( e ) {
+// ========== 事件监听 ==========
+// 音频播放事件
+document.addEventListener('click', playAudio);
+document.addEventListener('touchstart', playAudio, { passive: false });
+canvas.addEventListener('click', playAudio);
+canvas.addEventListener('touchstart', playAudio, { passive: false });
+
+// 尺寸变化监听（屏幕旋转/窗口调整）
+window.addEventListener('resize', resizeCanvas);
+window.addEventListener('orientationchange', resizeCanvas); // 屏幕旋转
+
+// 触摸/鼠标事件
+canvas.addEventListener('touchmove', function( e ) {
     if (e.touches && e.touches[0]) {
         mx = e.touches[0].pageX - canvas.offsetLeft;
         my = e.touches[0].pageY - canvas.offsetTop;
     }
 });
 
-canvas.addEventListener( 'touchstart', function( e ) {
+canvas.addEventListener('touchstart', function( e ) {
     e.preventDefault();
     mousedown = true;
     if (e.touches && e.touches[0]) {
@@ -324,29 +374,46 @@ canvas.addEventListener( 'touchstart', function( e ) {
     }
 });
 
-canvas.addEventListener( 'touchend', function( e ) {
+canvas.addEventListener('touchend', function( e ) {
     e.preventDefault();
     mousedown = false;
 });
 
-// PC端鼠标事件
-canvas.addEventListener( 'mousemove', function( e ) {
+canvas.addEventListener('mousemove', function( e ) {
     mx = e.pageX - canvas.offsetLeft;
     my = e.pageY - canvas.offsetTop;
 });
 
-canvas.addEventListener( 'mousedown', function( e ) {
+canvas.addEventListener('mousedown', function( e ) {
     e.preventDefault();
     mousedown = true;
 });
 
-canvas.addEventListener( 'mouseup', function( e ) {
+canvas.addEventListener('mouseup', function( e ) {
     e.preventDefault();
     mousedown = false;
 });
 
-// 启动动画循环（确保页面加载后持续渲染）
-window.onload = loop;
+// ========== 初始化 ==========
+function init() {
+    // 初始化画布尺寸
+    resizeCanvas();
+    // 启动动画循环
+    loop();
+    // 尝试自动播放音频（大部分浏览器会失败）
+    audio.play().catch(() => {
+        audioTip.classList.remove('hidden');
+    });
+}
+
+// 页面加载完成后初始化
+window.addEventListener('load', init);
+// 页面可见性变化时恢复播放
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && isAudioPlayed) {
+        audio.play();
+    }
+});
 </script>
 
 </body>
