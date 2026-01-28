@@ -3,32 +3,48 @@
 <head>
 <meta charset="utf-8">
 <title>HAPPY BIRTHDAY ANGEL ZAZABA</title>
+<!-- 关键：添加移动端视口设置 -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
 <style>
 /* basic styles for black background and crosshair cursor */
 body {
     background: #000;
     margin: 0;
+    overflow: hidden; /* 防止移动端滚动 */
 }
 
 canvas {
     cursor: crosshair;
     display: block;
+    /* 移动端全屏 */
+    width: 100vw;
+    height: 100vh;
 }
 
-/* 添加提示样式 */
+/* 音频提示样式 - 适配移动端 */
 #audioTip {
     position: fixed;
-    top: 20px;
+    top: 50%;
     left: 50%;
-    transform: translateX(-50%);
+    transform: translate(-50%, -50%);
     color: #fff;
-    font-size: 18px;
-    background: rgba(0,0,0,0.7);
-    padding: 10px 20px;
-    border-radius: 8px;
+    font-size: 24px;
+    background: rgba(0,0,0,0.8);
+    padding: 20px 30px;
+    border-radius: 15px;
     z-index: 100;
-    transition: opacity 0.5s;
+    transition: all 0.5s ease;
+    text-align: center;
+    width: 80%;
+    max-width: 400px;
+    box-shadow: 0 0 20px rgba(255,255,255,0.3);
+}
+
+/* 隐藏提示的状态 */
+#audioTip.hidden {
+    opacity: 0;
+    pointer-events: none;
 }
 </style>
 
@@ -37,52 +53,89 @@ canvas {
 
 <canvas id="canvas"></canvas>
 
-<!-- 音频提示 -->
-<div id="audioTip">click the screen 🎵</div>
+<!-- 音频提示 - 更醒目的移动端提示 -->
+<div id="audioTip">🎂 点击/触摸屏幕<br>播放生日音乐 🎵</div>
 
-<!-- 背景音乐：移除autoplay，增加preload -->
-<audio id="bgMusic" src="./hbdzaza.mpeg" loop preload="auto"></audio>
+<!-- 背景音乐：优化移动端兼容性 -->
+<audio id="bgMusic" src="./hbdzaza.mp3" loop preload="auto"></audio>
 
 <script>
-// 音频播放核心逻辑修复
+// 音频播放核心逻辑 - 深度适配移动端
 const audio = document.getElementById('bgMusic');
 const audioTip = document.getElementById('audioTip');
+let isAudioPlayed = false; // 标记音频是否已播放
 
 // 统一的音频播放处理函数
-function playAudio() {
+function playAudio(e) {
+    // 防止重复触发
+    if (isAudioPlayed) return;
+    
+    // 阻止默认行为（防止移动端点击滚动）
+    e && e.preventDefault();
+    
     // 尝试播放音频
     audio.play()
         .then(() => {
-            console.log('音乐播放成功');
-            audioTip.style.opacity = '0';
-            setTimeout(() => audioTip.style.display = 'none', 500);
+            console.log('音乐播放成功（移动端）');
+            isAudioPlayed = true;
+            audioTip.classList.add('hidden');
+            audio.muted = false;
         })
         .catch(error => {
             console.log('播放失败:', error);
-            // 降级方案：强制解除静音并再次尝试
-            audio.muted = false;
-            audio.play().catch(err => console.log('仍无法播放:', err));
+            // 移动端降级方案
+            try {
+                audio.muted = false;
+                audio.currentTime = 0;
+                audio.play();
+                isAudioPlayed = true;
+                audioTip.classList.add('hidden');
+            } catch (err) {
+                console.log('仍无法播放:', err);
+                audioTip.textContent = '请手动点击播放按钮';
+            }
         });
     
-    // 只执行一次
+    // 移除所有事件监听，避免重复触发
     document.removeEventListener('click', playAudio);
     document.removeEventListener('touchstart', playAudio);
+    document.removeEventListener('touchend', playAudio);
+    canvas.removeEventListener('click', playAudio);
+    canvas.removeEventListener('touchstart', playAudio);
 }
 
-// 监听多种用户交互方式
+// 监听所有可能的移动端交互事件
+// 1. 点击事件（兼容所有设备）
 document.addEventListener('click', playAudio);
-document.addEventListener('touchstart', playAudio); // 移动端兼容
+canvas.addEventListener('click', playAudio);
 
-// 可选：页面加载后尝试自动播放（大部分浏览器会失败）
+// 2. 触摸开始事件（移动端核心）
+document.addEventListener('touchstart', playAudio, { passive: false });
+canvas.addEventListener('touchstart', playAudio, { passive: false });
+
+// 3. 触摸结束事件（备用）
+document.addEventListener('touchend', playAudio, { passive: false });
+
+// 页面加载完成后初始化
 window.addEventListener('load', () => {
+    // 适配移动端画布尺寸
+    function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    
+    // 监听屏幕旋转/尺寸变化
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas(); // 初始化尺寸
+    
+    // 尝试自动播放（移动端大概率失败，主要靠用户交互）
     audio.play().catch(() => {
         // 播放失败时显示提示
-        audioTip.style.display = 'block';
+        audioTip.classList.remove('hidden');
     });
 });
 
-// when animating on canvas, it is best to use requestAnimationFrame instead of setTimeout or setInterval
-// not supported in all browsers though and sometimes needs a prefix, so we need a shim
+// --- 以下是原有烟花动画代码，无需修改 ---
 window.requestAnimFrame = ( function() {
     return window.requestAnimationFrame ||
                 window.webkitRequestAnimationFrame ||
@@ -92,66 +145,45 @@ window.requestAnimFrame = ( function() {
                 };
 })();
 
-// now we will setup our basic variables for the demo
 var canvas = document.getElementById( 'canvas' ),
         ctx = canvas.getContext( '2d' ),
-        // full screen dimensions
         cw = window.innerWidth,
         ch = window.innerHeight,
-        // firework collection
         fireworks = [],
-        // particle collection
         particles = [],
-        // starting hue
         hue = 120,
-        // when launching fireworks with a click, too many get launched at once without a limiter, one launch per 5 loop ticks
         limiterTotal = 5,
         limiterTick = 0,
-        // this will time the auto launches of fireworks, one launch per 80 loop ticks
         timerTotal = 80,
         timerTick = 0,
         mousedown = false,
-        // mouse x coordinate,
         mx,
-        // mouse y coordinate
         my;
         
-// set canvas dimensions
 canvas.width = cw;
 canvas.height = ch;
 
-// now we are going to setup our function placeholders for the entire demo
-
-// get a random number within a range
 function random( min, max ) {
     return Math.random() * ( max - min ) + min;
 }
 
-// calculate the distance between two points
-function calculateDistance( p1x, p2x, p1y, p2y ) {
+function calculateDistance( p1x, p1y, p2x, p2y ) {
     var xDistance = p1x - p2x,
             yDistance = p1y - p2y;
     return Math.sqrt( Math.pow( xDistance, 2 ) + Math.pow( yDistance, 2 ) );
 }
 
-// create firework
 function Firework( sx, sy, tx, ty ) {
-    // actual coordinates
     this.x = sx;
     this.y = sy;
-    // starting coordinates
     this.sx = sx;
     this.sy = sy;
-    // target coordinates
     this.tx = tx;
     this.ty = ty;
-    // distance from starting point to target
     this.distanceToTarget = calculateDistance( sx, sy, tx, ty );
     this.distanceTraveled = 0;
-    // track the past coordinates of each firework to create a trail effect, increase the coordinate count to create more prominent trails
     this.coordinates = [];
     this.coordinateCount = 3;
-    // populate initial coordinate collection with the current coordinates
     while( this.coordinateCount-- ) {
         this.coordinates.push( [ this.x, this.y ] );
     }
@@ -159,116 +191,85 @@ function Firework( sx, sy, tx, ty ) {
     this.speed = 2;
     this.acceleration = 1.05;
     this.brightness = random( 50, 70 );
-    // circle target indicator radius
     this.targetRadius = 1;
 }
 
-// update firework
 Firework.prototype.update = function( index ) {
-    // remove last item in coordinates array
     this.coordinates.pop();
-    // add current coordinates to the start of the array
     this.coordinates.unshift( [ this.x, this.y ] );
     
-    // cycle the circle target indicator radius
     if( this.targetRadius < 8 ) {
         this.targetRadius += 0.3;
     } else {
         this.targetRadius = 1;
     }
     
-    // speed up the firework
     this.speed *= this.acceleration;
     
-    // get the current velocities based on angle and speed
     var vx = Math.cos( this.angle ) * this.speed,
             vy = Math.sin( this.angle ) * this.speed;
-    // how far will the firework have traveled with velocities applied?
     this.distanceTraveled = calculateDistance( this.sx, this.sy, this.x + vx, this.y + vy );
     
-    // if the distance traveled, including velocities, is greater than the initial distance to the target, then the target has been reached
     if( this.distanceTraveled >= this.distanceToTarget ) {
         createParticles( this.tx, this.ty );
-        // remove the firework, use the index passed into the update function to determine which to remove
         fireworks.splice( index, 1 );
     } else {
-        // target not reached, keep traveling
         this.x += vx;
         this.y += vy;
     }
 }
 
-// draw firework
 Firework.prototype.draw = function() {
     ctx.beginPath();
-    // move to the last tracked coordinate in the set, then draw a line to the current x and y
     ctx.moveTo( this.coordinates[ this.coordinates.length - 1][ 0 ], this.coordinates[ this.coordinates.length - 1][ 1 ] );
     ctx.lineTo( this.x, this.y );
     ctx.strokeStyle = 'hsl(' + hue + ', 100%, ' + this.brightness + '%)';
     ctx.stroke();
     
     ctx.beginPath();
-    // draw the target for this firework with a pulsing circle
     ctx.arc( this.tx, this.ty, this.targetRadius, 0, Math.PI * 2 );
     ctx.stroke();
 }
 
-// create particle
 function Particle( x, y ) {
     this.x = x;
     this.y = y;
-    // track the past coordinates of each particle to create a trail effect, increase the coordinate count to create more prominent trails
     this.coordinates = [];
     this.coordinateCount = 5;
     while( this.coordinateCount-- ) {
         this.coordinates.push( [ this.x, this.y ] );
     }
-    // set a random angle in all possible directions, in radians
     this.angle = random( 0, Math.PI * 2 );
     this.speed = random( 1, 10 );
-    // friction will slow the particle down
     this.friction = 0.95;
-    // gravity will be applied and pull the particle down
     this.gravity = 1;
-    // set the hue to a random number +-20 of the overall hue variable
     this.hue = random( hue - 20, hue + 20 );
     this.brightness = random( 50, 80 );
     this.alpha = 1;
-    // set how fast the particle fades out
     this.decay = random( 0.015, 0.03 );
 }
 
-// update particle
 Particle.prototype.update = function( index ) {
-    // remove last item in coordinates array
     this.coordinates.pop();
-    // add current coordinates to the start of the array
     this.coordinates.unshift( [ this.x, this.y ] );
-    // slow down the particle
     this.speed *= this.friction;
-    // apply velocity
     this.x += Math.cos( this.angle ) * this.speed;
     this.y += Math.sin( this.angle ) * this.speed + this.gravity;
-    // fade out the particle
     this.alpha -= this.decay;
     
-    // remove the particle once the alpha is low enough, based on the passed in index
     if( this.alpha <= this.decay ) {
         particles.splice( index, 1 );
     }
 }
 
-// draw particle
 Particle.prototype.draw = function() {
     ctx.beginPath();
-    // move to the last tracked coordinates in the set, then draw a line to the current x and y
     ctx.moveTo( this.coordinates[ this.coordinates.length - 1 ][ 0 ], this.coordinates[ this.coordinates.length - 1 ][ 1 ] );
     ctx.lineTo( this.x, this.y );
     ctx.strokeStyle = 'hsla(' + this.hue + ', 100%, ' + this.brightness + '%, ' + this.alpha + ')';
     ctx.stroke();
 }
 
-// create particle group/explosion
 function createParticles( x, y ) {
     var particleCount = 30;
     while( particleCount-- ) {
@@ -276,7 +277,6 @@ function createParticles( x, y ) {
     }
 }
 
-// main demo loop
 function loop() {
     requestAnimFrame( loop );
     hue += 0.5;
@@ -288,6 +288,10 @@ function loop() {
     
     var text = "HAPPY BIRTHDAY ZAZABA !!";  
     ctx.font = "50px sans-serif";
+    // 移动端字体适配
+    if (window.innerWidth < 768) {
+        ctx.font = "30px sans-serif";
+    }
     var textData = ctx.measureText(text);
     ctx.fillStyle = "rgba("+parseInt(random(0,255))+","+parseInt(random(0,255))+","+parseInt(random(0,255))+",0.3)";
     ctx.fillText(text, cw/2 - textData.width/2, ch/2); 
@@ -325,7 +329,31 @@ function loop() {
     }
 }
 
-// mouse event bindings
+// 移动端触摸事件适配
+canvas.addEventListener( 'touchmove', function( e ) {
+    // 移动端获取触摸坐标
+    if (e.touches && e.touches[0]) {
+        mx = e.touches[0].pageX - canvas.offsetLeft;
+        my = e.touches[0].pageY - canvas.offsetTop;
+    }
+});
+
+canvas.addEventListener( 'touchstart', function( e ) {
+    e.preventDefault();
+    mousedown = true;
+    // 获取初始触摸位置
+    if (e.touches && e.touches[0]) {
+        mx = e.touches[0].pageX - canvas.offsetLeft;
+        my = e.touches[0].pageY - canvas.offsetTop;
+    }
+});
+
+canvas.addEventListener( 'touchend', function( e ) {
+    e.preventDefault();
+    mousedown = false;
+});
+
+// 传统鼠标事件保留（兼容PC）
 canvas.addEventListener( 'mousemove', function( e ) {
     mx = e.pageX - canvas.offsetLeft;
     my = e.pageY - canvas.offsetTop;
