@@ -15,6 +15,21 @@ canvas {
     cursor: crosshair;
     display: block;
 }
+
+/* 添加提示样式 */
+#audioTip {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    font-size: 18px;
+    background: rgba(0,0,0,0.7);
+    padding: 10px 20px;
+    border-radius: 8px;
+    z-index: 100;
+    transition: opacity 0.5s;
+}
 </style>
 
 </head>
@@ -22,15 +37,49 @@ canvas {
 
 <canvas id="canvas"></canvas>
 
-<!-- 背景音乐：自动播放 + 循环 -->
-<audio id="bgMusic" src="./hbdzaza.mpeg" autoplay loop></audio>
+<!-- 音频提示 -->
+<div id="audioTip">click the screen 🎵</div>
+
+<!-- 背景音乐：移除autoplay，增加preload -->
+<audio id="bgMusic" src="./hbdzaza.mpeg" loop preload="auto"></audio>
 
 <script>
-// 可选：尝试取消静音（某些浏览器需要用户交互后才能播放声音）
-document.addEventListener('click', function() {
-    const audio = document.getElementById('bgMusic');
-    audio.muted = false; // 如果之前被静音，点击后恢复声音
-}, { once: true });
+// 音频播放核心逻辑修复
+const audio = document.getElementById('bgMusic');
+const audioTip = document.getElementById('audioTip');
+
+// 统一的音频播放处理函数
+function playAudio() {
+    // 尝试播放音频
+    audio.play()
+        .then(() => {
+            console.log('音乐播放成功');
+            audioTip.style.opacity = '0';
+            setTimeout(() => audioTip.style.display = 'none', 500);
+        })
+        .catch(error => {
+            console.log('播放失败:', error);
+            // 降级方案：强制解除静音并再次尝试
+            audio.muted = false;
+            audio.play().catch(err => console.log('仍无法播放:', err));
+        });
+    
+    // 只执行一次
+    document.removeEventListener('click', playAudio);
+    document.removeEventListener('touchstart', playAudio);
+}
+
+// 监听多种用户交互方式
+document.addEventListener('click', playAudio);
+document.addEventListener('touchstart', playAudio); // 移动端兼容
+
+// 可选：页面加载后尝试自动播放（大部分浏览器会失败）
+window.addEventListener('load', () => {
+    audio.play().catch(() => {
+        // 播放失败时显示提示
+        audioTip.style.display = 'block';
+    });
+});
 
 // when animating on canvas, it is best to use requestAnimationFrame instead of setTimeout or setInterval
 // not supported in all browsers though and sometimes needs a prefix, so we need a shim
@@ -79,7 +128,7 @@ function random( min, max ) {
 }
 
 // calculate the distance between two points
-function calculateDistance( p1x, p1y, p2x, p2y ) {
+function calculateDistance( p1x, p2x, p1y, p2y ) {
     var xDistance = p1x - p2x,
             yDistance = p1y - p2y;
     return Math.sqrt( Math.pow( xDistance, 2 ) + Math.pow( yDistance, 2 ) );
