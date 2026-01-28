@@ -3,26 +3,24 @@
 <head>
 <meta charset="utf-8">
 <title>HAPPY BIRTHDAY ANGEL ZAZABA</title>
-<!-- 关键：添加移动端视口设置 -->
+<!-- 移动端视口设置 -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
 <style>
-/* basic styles for black background and crosshair cursor */
 body {
     background: #000;
     margin: 0;
-    overflow: hidden; /* 防止移动端滚动 */
+    overflow: hidden;
 }
 
 canvas {
     cursor: crosshair;
     display: block;
-    /* 移动端全屏 */
     width: 100vw;
     height: 100vh;
 }
 
-/* 音频提示样式 - 适配移动端 */
+/* 音频提示样式 - 仅隐藏提示，不影响画布 */
 #audioTip {
     position: fixed;
     top: 50%;
@@ -34,109 +32,87 @@ canvas {
     padding: 20px 30px;
     border-radius: 15px;
     z-index: 100;
-    transition: all 0.5s ease;
+    transition: opacity 0.5s ease;
     text-align: center;
     width: 80%;
     max-width: 400px;
     box-shadow: 0 0 20px rgba(255,255,255,0.3);
+    /* 初始显示 */
+    opacity: 1;
+    pointer-events: auto;
 }
 
-/* 隐藏提示的状态 */
+/* 仅隐藏提示的透明度，不删除元素 */
 #audioTip.hidden {
     opacity: 0;
     pointer-events: none;
 }
 </style>
-
 </head>
 <body>
 
 <canvas id="canvas"></canvas>
-
-<!-- 音频提示 - 更醒目的移动端提示 -->
 <div id="audioTip">🎂 点击/触摸屏幕<br>播放生日音乐 🎵</div>
-
-<!-- 背景音乐：优化移动端兼容性 -->
-<audio id="bgMusic" src="./hbdzaza.mp3" loop preload="auto"></audio>
+<audio id="bgMusic" src="./hbdzaza.mpeg" loop preload="auto"></audio>
 
 <script>
-// 音频播放核心逻辑 - 深度适配移动端
+// 核心修复：分离音频播放和事件移除逻辑
 const audio = document.getElementById('bgMusic');
 const audioTip = document.getElementById('audioTip');
-let isAudioPlayed = false; // 标记音频是否已播放
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
 
-// 统一的音频播放处理函数
+let isAudioPlayed = false; // 仅标记音频是否播放，不移除交互事件
+let cw = window.innerWidth;
+let ch = window.innerHeight;
+
+// ========== 音频播放逻辑（修复核心）==========
 function playAudio(e) {
-    // 防止重复触发
-    if (isAudioPlayed) return;
+    if (e) e.preventDefault(); // 仅阻止默认行为，不移除事件
     
-    // 阻止默认行为（防止移动端点击滚动）
-    e && e.preventDefault();
+    if (isAudioPlayed) return; // 防止重复播放
     
-    // 尝试播放音频
     audio.play()
         .then(() => {
-            console.log('音乐播放成功（移动端）');
+            console.log('音乐播放成功');
             isAudioPlayed = true;
-            audioTip.classList.add('hidden');
             audio.muted = false;
+            audioTip.classList.add('hidden'); // 仅隐藏提示，不影响画布
         })
         .catch(error => {
-            console.log('播放失败:', error);
-            // 移动端降级方案
-            try {
-                audio.muted = false;
-                audio.currentTime = 0;
-                audio.play();
-                isAudioPlayed = true;
-                audioTip.classList.add('hidden');
-            } catch (err) {
-                console.log('仍无法播放:', err);
-                audioTip.textContent = '请手动点击播放按钮';
-            }
+            console.log('播放失败，尝试降级方案:', error);
+            // 降级方案：仅解除静音，不移除事件
+            audio.muted = false;
+            audio.currentTime = 0;
+            audio.play().catch(err => {
+                audioTip.textContent = '请检查音频文件或浏览器设置';
+            });
+            isAudioPlayed = true;
+            audioTip.classList.add('hidden');
         });
-    
-    // 移除所有事件监听，避免重复触发
-    document.removeEventListener('click', playAudio);
-    document.removeEventListener('touchstart', playAudio);
-    document.removeEventListener('touchend', playAudio);
-    canvas.removeEventListener('click', playAudio);
-    canvas.removeEventListener('touchstart', playAudio);
 }
 
-// 监听所有可能的移动端交互事件
-// 1. 点击事件（兼容所有设备）
-document.addEventListener('click', playAudio);
-canvas.addEventListener('click', playAudio);
+// ========== 画布尺寸适配（修复初始化错误）==========
+function resizeCanvas() {
+    cw = window.innerWidth;
+    ch = window.innerHeight;
+    canvas.width = cw;
+    canvas.height = ch;
+}
 
-// 2. 触摸开始事件（移动端核心）
+// 初始化画布尺寸
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// ========== 绑定交互事件（保留所有事件，不移除）==========
+// 音频播放事件（保留，仅触发一次播放）
+document.addEventListener('click', playAudio);
 document.addEventListener('touchstart', playAudio, { passive: false });
+canvas.addEventListener('click', playAudio);
 canvas.addEventListener('touchstart', playAudio, { passive: false });
 
-// 3. 触摸结束事件（备用）
-document.addEventListener('touchend', playAudio, { passive: false });
-
-// 页面加载完成后初始化
-window.addEventListener('load', () => {
-    // 适配移动端画布尺寸
-    function resizeCanvas() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-    }
-    
-    // 监听屏幕旋转/尺寸变化
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas(); // 初始化尺寸
-    
-    // 尝试自动播放（移动端大概率失败，主要靠用户交互）
-    audio.play().catch(() => {
-        // 播放失败时显示提示
-        audioTip.classList.remove('hidden');
-    });
-});
-
-// --- 以下是原有烟花动画代码，无需修改 ---
-window.requestAnimFrame = ( function() {
+// ========== 原有烟花动画逻辑（完整保留）==========
+window.requestAnimFrame = (function() {
     return window.requestAnimationFrame ||
                 window.webkitRequestAnimationFrame ||
                 window.mozRequestAnimationFrame ||
@@ -145,34 +121,30 @@ window.requestAnimFrame = ( function() {
                 };
 })();
 
-var canvas = document.getElementById( 'canvas' ),
-        ctx = canvas.getContext( '2d' ),
-        cw = window.innerWidth,
-        ch = window.innerHeight,
-        fireworks = [],
-        particles = [],
-        hue = 120,
-        limiterTotal = 5,
-        limiterTick = 0,
-        timerTotal = 80,
-        timerTick = 0,
-        mousedown = false,
-        mx,
-        my;
-        
-canvas.width = cw;
-canvas.height = ch;
+// 烟花相关变量
+let fireworks = [];
+let particles = [];
+let hue = 120;
+let limiterTotal = 5;
+let limiterTick = 0;
+let timerTotal = 80;
+let timerTick = 0;
+let mousedown = false;
+let mx = cw / 2;
+let my = ch / 2;
 
+// 工具函数
 function random( min, max ) {
     return Math.random() * ( max - min ) + min;
 }
 
 function calculateDistance( p1x, p1y, p2x, p2y ) {
-    var xDistance = p1x - p2x,
-            yDistance = p1y - p2y;
+    var xDistance = p1x - p2x;
+    var yDistance = p1y - p2y;
     return Math.sqrt( Math.pow( xDistance, 2 ) + Math.pow( yDistance, 2 ) );
 }
 
+// 烟花类
 function Firework( sx, sy, tx, ty ) {
     this.x = sx;
     this.y = sy;
@@ -206,8 +178,8 @@ Firework.prototype.update = function( index ) {
     
     this.speed *= this.acceleration;
     
-    var vx = Math.cos( this.angle ) * this.speed,
-            vy = Math.sin( this.angle ) * this.speed;
+    var vx = Math.cos( this.angle ) * this.speed;
+    var vy = Math.sin( this.angle ) * this.speed;
     this.distanceTraveled = calculateDistance( this.sx, this.sy, this.x + vx, this.y + vy );
     
     if( this.distanceTraveled >= this.distanceToTarget ) {
@@ -231,6 +203,7 @@ Firework.prototype.draw = function() {
     ctx.stroke();
 }
 
+// 粒子类
 function Particle( x, y ) {
     this.x = x;
     this.y = y;
@@ -277,37 +250,40 @@ function createParticles( x, y ) {
     }
 }
 
+// 主循环（核心：确保持续渲染）
 function loop() {
     requestAnimFrame( loop );
     hue += 0.5;
     
+    // 保留画布清空逻辑，这是正常的动画渲染
     ctx.globalCompositeOperation = 'destination-out';
     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     ctx.fillRect( 0, 0, cw, ch );
     ctx.globalCompositeOperation = 'lighter';
     
+    // 文字适配
     var text = "HAPPY BIRTHDAY ZAZABA !!";  
-    ctx.font = "50px sans-serif";
-    // 移动端字体适配
-    if (window.innerWidth < 768) {
-        ctx.font = "30px sans-serif";
-    }
+    var fontSize = window.innerWidth < 768 ? "30px" : "50px";
+    ctx.font = fontSize + " sans-serif";
     var textData = ctx.measureText(text);
     ctx.fillStyle = "rgba("+parseInt(random(0,255))+","+parseInt(random(0,255))+","+parseInt(random(0,255))+",0.3)";
     ctx.fillText(text, cw/2 - textData.width/2, ch/2); 
     
+    // 渲染烟花
     var i = fireworks.length;
     while( i-- ) {
         fireworks[ i ].draw();
         fireworks[ i ].update( i );
     }
     
+    // 渲染粒子
     i = particles.length;
     while( i-- ) {
         particles[ i ].draw();
         particles[ i ].update( i );
     }
     
+    // 自动发射烟花
     if( timerTick >= timerTotal ) {
         if( !mousedown ) {
             for(var h=0; h<50; h++) {
@@ -319,6 +295,7 @@ function loop() {
         timerTick++;
     }
     
+    // 点击/触摸发射烟花
     if( limiterTick >= limiterTotal ) {
         if( mousedown ) {
             fireworks.push( new Firework( cw / 2, ch/2, mx, my ) );
@@ -329,9 +306,9 @@ function loop() {
     }
 }
 
-// 移动端触摸事件适配
+// ========== 交互事件（完整保留，确保点击后仍能控制烟花）==========
+// 移动端触摸事件
 canvas.addEventListener( 'touchmove', function( e ) {
-    // 移动端获取触摸坐标
     if (e.touches && e.touches[0]) {
         mx = e.touches[0].pageX - canvas.offsetLeft;
         my = e.touches[0].pageY - canvas.offsetTop;
@@ -341,7 +318,6 @@ canvas.addEventListener( 'touchmove', function( e ) {
 canvas.addEventListener( 'touchstart', function( e ) {
     e.preventDefault();
     mousedown = true;
-    // 获取初始触摸位置
     if (e.touches && e.touches[0]) {
         mx = e.touches[0].pageX - canvas.offsetLeft;
         my = e.touches[0].pageY - canvas.offsetTop;
@@ -353,7 +329,7 @@ canvas.addEventListener( 'touchend', function( e ) {
     mousedown = false;
 });
 
-// 传统鼠标事件保留（兼容PC）
+// PC端鼠标事件
 canvas.addEventListener( 'mousemove', function( e ) {
     mx = e.pageX - canvas.offsetLeft;
     my = e.pageY - canvas.offsetTop;
@@ -369,6 +345,7 @@ canvas.addEventListener( 'mouseup', function( e ) {
     mousedown = false;
 });
 
+// 启动动画循环（确保页面加载后持续渲染）
 window.onload = loop;
 </script>
 
